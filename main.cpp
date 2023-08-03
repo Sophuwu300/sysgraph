@@ -24,10 +24,10 @@ struct meminfo{
 void meminfo::loadinfo() {
     FILE* file = fopen("/proc/meminfo", "r");
     int line, n = 0;
-    char c[81];
-    fread(c, 1, 81, file);
+    char c[84];
+    fread(c, 1, 84, file);
     fclose(file);
-    for (int i = 0; i < 81; i++) {
+    for (int i = 0; i < 84; i++) {
         if (c[i] > 47 && c[i] < 58)(n *= 10) += c[i] - 48;
         else if (c[i] == 10) {
             n /= 1000;
