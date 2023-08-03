@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string>
+#include <cstring>
 #include <dirent.h>
 
 void panic(const char* msg){
@@ -65,15 +66,35 @@ int cpuinfo::getloadavg() {
     fclose(fp);
     return 100 * ((b[0]+b[1]+b[2]) - (a[0]+a[1]+a[2])) / ((b[0]+b[1]+b[2]+b[3]) - (a[0]+a[1]+a[2]+a[3]));
 }
+
 int cpuinfo::gettemp() {
     struct dirent *item;
+    FILE* file;
+    char buf[12];
+
     DIR *dir = opendir("/sys/class/thermal");
     while ((item = readdir(dir))) {
         if (strncmp(item->d_name, "thermal_zone", 12) != 0) continue;
-        printf("%s\n", item->d_name);
+
+        char path[256] = "/sys/class/thermal/";
+        strcat(path, item->d_name);
+        strcat(path, "/type");
+
+        file = fopen(path, "r");
+        fread(&buf, 1, 12, file);
+        fclose(file);
+
+        if (strncmp(buf, "x86_pkg_temp", 12) == 0) {
+            path[strlen(path) - 4] = '\0';
+            strcat(path, "temp");
+
+            file = fopen(path, "r");
+            fread(&buf, 1, 2, file);
+            fclose(file);
+            return ((int)buf[0]-48)*10+((int)buf[1]-48);
+        }
     }
 }
-
 void cpuinfo::loadinfo(){
     loadavg = getloadavg();
     temp = gettemp();
