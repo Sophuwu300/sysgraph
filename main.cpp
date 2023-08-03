@@ -16,12 +16,13 @@ void panic(const char* msg){
 }
 
 struct meminfo{
-    int total;
-    int free;
-    int available;
+    int total = 0;
+    int free = 0;
+    int available = 0;
     void loadmem();
     int used(){return total-free;}
     int taken(){return total-available;}
+    int percent(){if (total == 0){return 0;} else return 100*taken()/total;}
 };
 void meminfo::loadmem() {
     FILE* file = fopen("/proc/meminfo", "r");
@@ -45,8 +46,8 @@ void meminfo::loadmem() {
 }
 
 struct cpuinfo{
-    int temp;
-    int loadavg;
+    int temp = 0;
+    int loadavg = 0;
     void loadcpu();
     int getloadavg();
     int gettemp();
@@ -111,22 +112,31 @@ void signal_callback_handler(int signum) {
     exit(signum);
 }
 
-meminfo mem[256];
-cpuinfo cpu[256];
-
 int main(){
     std::cout << "\033[?25l\033[?1049h\033[2J" << std::endl;
     signal(SIGINT, signal_callback_handler);
+    meminfo mem;
+    cpuinfo cpu;
+    int cpugraph[150] = {0};
+    int ramgraph[150] = {0};
     for (;;) {
         int w, h;
         termsize(w, h);
-        mem[0].loadmem();
-        cpu[0].loadcpu();
+        mem.loadmem();
+        cpu.loadcpu();
+        for (int i = 150; i > 0; i--) {
+            cpugraph[i] = cpugraph[i-1];
+            ramgraph[i] = ramgraph[i-1];
+        }
+        cpugraph[0] = cpu.loadavg;
+        ramgraph[0] = mem.percent();
+
         std::cout << "\033[2J" << std::endl;
-        std::cout << "\033[2;4HLoad: " << cpu[0].loadavg << "%\033[3;4HTemp: " << cpu[0].temp << " C" << std::endl;
-        std::cout << "\033[2;22HUsed by apps: " << mem[0].taken() << "\033[2;55HIn use: " << mem[0].used() << std::endl;
-        std::cout << "\033[3;22HCan be freed: " << mem[0].available << "\033[3;50HUnallocated: " << mem[0].free << std::endl;
-        
+        std::cout << "\033[2;4HLoad: " << cpu.loadavg << "%\033[3;4HTemp: " << cpu.temp << " C" << std::endl;
+        std::cout << "\033[2;22HUsed by apps: " << mem.taken() << "  (" << mem.percent() << "%)\033[2;55HIn use: " << mem.used() << std::endl;
+        std::cout << "\033[3;22HCan be freed: " << mem.available << "\033[3;50HUnallocated: " << mem.free << std::endl;
+        for (int i = 3; i < w/2-3; i++) if (cpugraph[w/2-i-3] > 0) std::cout << "\033[" << h-1-((cpugraph[w/2-i-3])*(h-7)/100) << ";" << i << "H*" << std::endl;
+        for (int i = w/2+3; i < w-3; i++) /*if (ramgraph[i-w/2-3] > 0)*/ std::cout << "\033[" << h-1-((ramgraph[i-w/2-3])*(h-7)/100) << ";" << i << "H*" << std::endl;
     }
     return 0;
 }
