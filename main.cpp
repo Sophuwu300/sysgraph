@@ -1,11 +1,13 @@
 #include <iostream>
 #include <unistd.h>
 #include <cstdlib>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string>
 #include <cstring>
 #include <dirent.h>
+#include <sys/ioctl.h>
 
 void panic(const char* msg){
     // escape sequences
@@ -17,28 +19,24 @@ struct meminfo{
     int total;
     int free;
     int available;
-    void loadinfo();
+    void loadmem();
     int used(){return total-free;}
     int taken(){return total-available;}
 };
-void meminfo::loadinfo() {
+void meminfo::loadmem() {
     FILE* file = fopen("/proc/meminfo", "r");
-    int line, n = 0;
+    int line = 0, n = 0;
     char c[84];
-    fread(c, 1, 84, file);
+    fread(&c, 1, 84, file);
     fclose(file);
     for (int i = 0; i < 84; i++) {
-        if (c[i] > 47 && c[i] < 58)(n *= 10) += c[i] - 48;
+        if (c[i] > 47 && c[i] < 58) ((n *= 10) += c[i] - 48);
         else if (c[i] == 10) {
             n /= 1000;
             switch (line) {
-                case 0:
-                    total = n;
-                case 1:
-                    free = n;
-                case 2:
-                    available = n;
-                    break;
+                case 0: total = n;
+                case 1: free = n;
+                case 2: available = n;
             }
             n = 0;
             line++;
@@ -49,7 +47,7 @@ void meminfo::loadinfo() {
 struct cpuinfo{
     int temp;
     int loadavg;
-    void loadinfo();
+    void loadcpu();
     int getloadavg();
     int gettemp();
 };
@@ -94,24 +92,41 @@ int cpuinfo::gettemp() {
             return ((int)buf[0]-48)*10+((int)buf[1]-48);
         }
     }
+    return 0;
 }
-void cpuinfo::loadinfo(){
+void cpuinfo::loadcpu(){
     loadavg = getloadavg();
     temp = gettemp();
 }
 
+void termsize(int& w, int& h){
+    struct winsize size;
+    ioctl(STDOUT_FILENO, TIOCGWINSZ, &size);
+    w = size.ws_col;
+    h = size.ws_row;
+}
+
+void signal_callback_handler(int signum) {
+    std::cout << "\033[?1049l\033[?25h" << std::endl;
+    exit(signum);
+}
+
+meminfo mem[256];
+cpuinfo cpu[256];
 
 int main(){
-    cpuinfo cpu;
-    cpu.loadinfo();
-    printf("CPU load: %d\n", cpu.loadavg);
-    printf("CPU temp: %d\n", cpu.temp);
-    meminfo mem;
-    mem.loadinfo();
-    printf("Memory used: %d\n", mem.used());
-    printf("Memory taken: %d\n", mem.taken());
-    printf("Memory free: %d\n", mem.free);
-    printf("Memory available: %d\n", mem.available);
-    printf("Memory total: %d\n", mem.total);
+    std::cout << "\033[?25l\033[?1049h\033[2J" << std::endl;
+    signal(SIGINT, signal_callback_handler);
+    for (;;) {
+        int w, h;
+        termsize(w, h);
+        mem[0].loadmem();
+        cpu[0].loadcpu();
+        std::cout << "\033[2J" << std::endl;
+        std::cout << "\033[2;4HLoad: " << cpu[0].loadavg << "%\033[3;4HTemp: " << cpu[0].temp << " C" << std::endl;
+        std::cout << "\033[2;22HUsed by apps: " << mem[0].taken() << "\033[2;55HIn use: " << mem[0].used() << std::endl;
+        std::cout << "\033[3;22HCan be freed: " << mem[0].available << "\033[3;50HUnallocated: " << mem[0].free << std::endl;
+        
+    }
     return 0;
 }
