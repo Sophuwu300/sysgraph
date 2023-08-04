@@ -110,8 +110,7 @@ void signal_callback_handler(int signum) {
 }
 
 std::string padint(int n, int len){
-    std::string s = std::to_string(n);
-    if (s.length() < len) for (int i = 0; i <= len - s.length(); i++) s = " " + s;
+    for (std::string s = std::to_string(n); s.length() < len; s = " " + s);
     return s;
 }
 
@@ -120,9 +119,7 @@ int graphscale(int n) {return h-1-(n*(h-6)/100);}
 void plot(int x, int y, int color){
     if (color > 7 || color < 1) color = 7;
     if (x%2 == 0) color+=8;
-    for (;y<h;) {
-        std::cout << "\033[" << y++ << ";" << x << "H\033[48;5;" << color << "m \033[0m" << std::endl;
-    }
+    for (;y<h;std::cout << "\033[" << y++ << ";" << x << "H\033[48;5;" << color << "m \033[0m");
 }
 
 int main(){
@@ -131,7 +128,7 @@ int main(){
     int cpugraph[150] = {0};
     int ramgraph[150] = {0};
     int i;
-    int j;
+    std::string bg;
     std::string graphnum;
     std::cout << "\033[?25l\033[?1049h\033[2J" << std::endl;
     signal(SIGINT, signal_callback_handler);
@@ -159,21 +156,23 @@ int main(){
         << "\033[2J"
         << "\033[2;3HLoad: " << padint(cpu.loadavg, 3) << "% Memory:\033[3;3HTemp: " << padint(cpu.temp, 3) << "C"
         << "\033[2;22HUsed by apps: " << padint(mem.taken(), 5) << " (" << mem.percent() << "%)\033[2;48HUsed: " << padint(mem.used(), 5)
-        << "\033[3;22HCan be freed: " << padint(mem.available, 5) << "\033[3;48HFree: " << padint(mem.free, 5) << std::endl;
-        for (i = 3; i < w/2-2; i++) {
-            for (j = 5; j < h; j++) {
-                std::cout << "\033[" << j << ";" << i << "H\033[48;5;235m \033[0m"
-                << "\033[" << j << ";" << i+w/2+2 << "H\033[48;5;235m \033[0m" << std::endl;
-            }
+        << "\033[3;22HCan be freed: " << padint(mem.available, 5) << "\033[3;48HFree: " << padint(mem.free, 5);
+
+        for (bg = ""; bg.length() < w-4; bg += " ");
+        for (i = 5; i < h; i++) {
+            std::cout << "\033[" << i << ";3H\033[48;5;235m" << bg << "\033[0m";
         }
+
         for (i = 3; i < w/2-2; i++) {
             plot(i, graphscale(cpugraph[w/2+1-i-3]), 4);
             plot(i+w/2+2, graphscale(ramgraph[w/2+1-i-3]), 6);
         }
+
         for (i = 5; i < h; i++) {
             graphnum = padint(100-(i-5)*100/(h-6), 3);
-            std::cout << "\033[" << i << ";" << w/2-1 << "H-" << graphnum << "-" << std::endl;
+            std::cout << "\033[" << i << ";" << w/2-2 << "H -" << graphnum << "- ";
         }
+        std::cout << std::endl;
     }
     return 0;
 }
