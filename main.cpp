@@ -9,11 +9,7 @@
 #include <dirent.h>
 #include <sys/ioctl.h>
 
-void panic(const char* msg){
-    // escape sequences
-    std::cerr << msg << std::endl;
-    exit(1);
-}
+int w, h;
 
 struct meminfo{
     int total = 0;
@@ -23,6 +19,7 @@ struct meminfo{
     int used(){return total-free;}
     int taken(){return total-available;}
     int percent(){if (total == 0){return 0;} else return 100*taken()/total;}
+    int bufpercent(){if (total == 0){return 0;} else return 100*used()/total;}
 };
 void meminfo::loadmem() {
     FILE* file = fopen("/proc/meminfo", "r");
@@ -112,18 +109,36 @@ void signal_callback_handler(int signum) {
     exit(signum);
 }
 
+std::string padint(int n, int len){
+    std::string s = std::to_string(n);
+    if (s.length() < len) for (int i = 0; i <= len - s.length(); i++) s = " " + s;
+    return s;
+}
+
+void plot(int x, int y){
+    std::cout << "\033[" << y-- << ";" << x << "H\033[1;31m*" << std::endl;
+    for (;y>h-1;) {
+        std::cout << "\033[" << y-- << ";" << x << "H|" << std::endl;
+    }
+}
+
+int graphscale(int n) {return h-1-(n*(h-6)/100);}
+
 int main(){
-    std::cout << "\033[?25l\033[?1049h\033[2J" << std::endl;
-    signal(SIGINT, signal_callback_handler);
     meminfo mem;
     cpuinfo cpu;
     int cpugraph[150] = {0};
     int ramgraph[150] = {0};
+    int i;
+    std::string pad;
+    std::cout << "\033[?25l\033[?1049h\033[2J" << std::endl;
+    signal(SIGINT, signal_callback_handler);
     for (;;) {
-        int w, h;
         termsize(w, h);
+
         mem.loadmem();
-        cpu.loadcpu();
+        cpu.loadcpu(); // contains usleep(1000000)
+
         for (int i = 150; i > 0; i--) {
             cpugraph[i] = cpugraph[i-1];
             ramgraph[i] = ramgraph[i-1];
@@ -131,12 +146,21 @@ int main(){
         cpugraph[0] = cpu.loadavg;
         ramgraph[0] = mem.percent();
 
-        std::cout << "\033[2J" << std::endl;
-        std::cout << "\033[2;4HLoad: " << cpu.loadavg << "%\033[3;4HTemp: " << cpu.temp << " C" << std::endl;
-        std::cout << "\033[2;22HUsed by apps: " << mem.taken() << "  (" << mem.percent() << "%)\033[2;55HIn use: " << mem.used() << std::endl;
-        std::cout << "\033[3;22HCan be freed: " << mem.available << "\033[3;50HUnallocated: " << mem.free << std::endl;
-        for (int i = 3; i < w/2-3; i++) if (cpugraph[w/2-i-3] > 0) std::cout << "\033[" << h-1-((cpugraph[w/2-i-3])*(h-7)/100) << ";" << i << "H*" << std::endl;
-        for (int i = w/2+3; i < w-3; i++) /*if (ramgraph[i-w/2-3] > 0)*/ std::cout << "\033[" << h-1-((ramgraph[i-w/2-3])*(h-7)/100) << ";" << i << "H*" << std::endl;
+        if (w < 60 || h < 10) {
+            std::cout << "\033[2J\033[1;1HWindow too small\033[2;1HMinimum size: 60x10" << std::endl;
+            continue;
+        }
+        if (w > 300) w = 300;
+        if (h > 106) h = 106;
+
+        std::cout
+        << "\033[2J"
+        << "\033[2;3HLoad: " << padint(cpu.loadavg, 3) << "% Memory:\033[3;3HTemp: " << padint(cpu.temp, 3) << "C"
+        << "\033[2;22HUsed by apps: " << padint(mem.taken(), 5) << " (" << mem.percent() << "%)\033[2;48HUsed: " << padint(mem.used(), 5)
+        << "\033[3;22HCan be freed: " << padint(mem.available, 5) << "\033[3;48HFree: " << padint(mem.free, 5) << std::endl;
+
+        for (i = 3; i < w/2-3; i++) std::cout << "\033[" << graphscale(cpugraph[w/2-i-3]) << ";" << i << "H*\033[" << graphscale(ramgraph[w/2-i-3]) << ";" << i+w/2 << "H*" << std::endl;
+        for (i = 5; i < h; i++) std::cout << "\033[" << i << ";2H|\033[" << i << ";" << w/2-3 << "H|" << padint(100-(i-5)*100/(h-6), 3) << " |" << std::endl;
     }
     return 0;
 }
