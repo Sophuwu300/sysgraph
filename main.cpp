@@ -110,7 +110,8 @@ void signal_callback_handler(int signum) {
 }
 
 std::string padint(int n, int len){
-    for (std::string s = std::to_string(n); s.length() < len; s = " " + s);
+    std::string s = std::to_string(n);
+    for (; s.length() < len; s = " " + s);
     return s;
 }
 
