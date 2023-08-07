@@ -1,11 +1,5 @@
-#include <iostream>
-#include <unistd.h>
-#include <cstdlib>
-#include <signal.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string>
-#include <cstring>
+#include <csignal>
 #include <dirent.h>
 #include <sys/ioctl.h>
 
@@ -67,27 +61,28 @@ int cpuinfo::gettemp() {
     struct dirent *item;
     FILE* file;
     char buf[12];
+    std::string name;
+    std::string path;
 
-    DIR *dir = opendir("/sys/class/thermal");
+    DIR *dir = opendir("/sys/class/thermal/");
     while ((item = readdir(dir))) {
-        if (strncmp(item->d_name, "thermal_zone", 12) != 0) continue;
+        name = std::string(item->d_name);
+        if (name.substr(0,12) == "thermal_zone") {
 
-        char path[256] = "/sys/class/thermal/";
-        strcat(path, item->d_name);
-        strcat(path, "/type");
+            path = "/sys/class/thermal/" + name + "/type";
 
-        file = fopen(path, "r");
-        fread(&buf, 1, 12, file);
-        fclose(file);
-
-        if (strncmp(buf, "x86_pkg_temp", 12) == 0) {
-            path[strlen(path) - 4] = '\0';
-            strcat(path, "temp");
-
-            file = fopen(path, "r");
-            fread(&buf, 1, 2, file);
+            file = fopen(path.c_str(), "r");
+            fread(&buf, 1, 12, file);
             fclose(file);
-            return ((int)buf[0]-48)*10+((int)buf[1]-48);
+
+            if (std::string(buf) == "x86_pkg_temp") {
+                path = "/sys/class/thermal/" + name + "/temp";
+
+                file = fopen(path.c_str(), "r");
+                fread(&buf, 1, 2, file);
+                fclose(file);
+                return ((int) buf[0] - 48) * 10 + ((int) buf[1] - 48);
+            }
         }
     }
     return 0;
@@ -97,7 +92,7 @@ void cpuinfo::loadcpu(){
     temp = gettemp();
 }
 
-void termsize(int& w, int& h){
+void termsize(){
     struct winsize size;
     ioctl(STDOUT_FILENO, TIOCGWINSZ, &size);
     w = size.ws_col;
@@ -105,7 +100,7 @@ void termsize(int& w, int& h){
 }
 
 void signal_callback_handler(int signum) {
-    std::cout << "\033[?1049l\033[?25h" << std::endl;
+    printf("\033[?1049l\033[?25h");
     exit(signum);
 }
 
@@ -117,10 +112,11 @@ std::string padint(int n, int len){
 
 int graphscale(int n) {return h-1-(n*(h-6)/100);}
 
-void plot(int x, int y, int color){
+void plot(int x, int y, int color, std::string* s){
     if (color > 7 || color < 1) color = 7;
     if (x%2 == 0) color+=8;
-    for (;y<h;std::cout << "\033[" << y++ << ";" << x << "H\033[48;5;" << color << "m \033[0m");
+    std::string print = std::string(";").append(std::to_string(x)).append("H\033[48;5;").append(std::to_string(color)).append("m \033[0m");
+    for (;y<h;y++) s->append("\033[").append(std::to_string(y)).append(print);
 }
 
 int main(){
@@ -131,10 +127,13 @@ int main(){
     int i;
     std::string bg;
     std::string graphnum;
-    std::cout << "\033[?25l\033[?1049h\033[2J" << std::endl;
+    std::string tmp;
+    std::string outbuf;
+    outbuf.reserve(1000000);
+    printf("\033[?25l\033[?1049h\033[2J");
     signal(SIGINT, signal_callback_handler);
     for (;;) {
-        termsize(w, h);
+        termsize();
 
         mem.loadmem();
         cpu.loadcpu(); // contains usleep(1000000)
@@ -147,33 +146,42 @@ int main(){
         ramgraph[0] = mem.percent();
 
         if (w < 60 || h < 10) {
-            std::cout << "\033[2J\033[1;1HWindow too small\033[2;1HMinimum size: 60x10" << std::endl;
+            printf("\033[2J\033[1;1HWindow too small\033[2;1HMinimum size: 60x10");
             continue;
         }
         if (w > 300) w = 300;
         if (h > 106) h = 106;
 
-        std::cout
-        << "\033[2J"
-        << "\033[2;3HLoad: " << padint(cpu.loadavg, 3) << "% Memory:\033[3;3HTemp: " << padint(cpu.temp, 3) << "C"
-        << "\033[2;22HUsed by apps: " << padint(mem.taken(), 5) << " (" << mem.percent() << "%)\033[2;48HUsed: " << padint(mem.used(), 5)
-        << "\033[3;22HCan be freed: " << padint(mem.available, 5) << "\033[3;48HFree: " << padint(mem.free, 5);
+        outbuf.append(std::string("\033[2J")
+        .append("\033[2;3HLoad: ").append(padint(cpu.loadavg, 3))
+        .append("% Memory:\033[3;3HTemp: ").append(padint(cpu.temp, 3)).append("C")
+        .append("\033[2;22HUsed by apps: ").append(padint(mem.taken(), 5))
+        .append(" (" + std::to_string(mem.percent())).append("%)\033[2;48HUsed: ")
+        .append(padint(mem.used(), 5)).append("\033[3;22HCan be freed: ").append(padint(mem.available, 5))
+        .append("\033[3;48HFree: ").append(padint(mem.free, 5)));
 
-        for (bg = ""; bg.length() < w-4; bg += " ");
+        for (bg = ";3H\033[48;5;235m"; bg.length() < w-4+14; bg.append(" "));
+        bg.append("\033[0m");
         for (i = 5; i < h; i++) {
-            std::cout << "\033[" << i << ";3H\033[48;5;235m" << bg << "\033[0m";
+            outbuf.append("\033[").append(std::to_string(i)).append(bg);
         }
+        outbuf.append("\0");
 
-        for (i = 3; i < w/2-2; i++) {
-            plot(i, graphscale(cpugraph[w/2+1-i-3]), 4);
-            plot(i+w/2+2, graphscale(ramgraph[w/2+1-i-3]), 6);
+        for (i = 3; i < w/2-2+w%2; i++) {
+            plot(i, graphscale(cpugraph[w/2+1-i-3]), 4, &outbuf);
+            plot(i+w/2+1, graphscale(ramgraph[w/2+1-i-3]), 6, &outbuf);
         }
+        outbuf.append("\0");
 
+        tmp = ";" + std::to_string(w/2-2) + "H -";
         for (i = 5; i < h; i++) {
-            graphnum = padint(100-(i-5)*100/(h-6), 3);
-            std::cout << "\033[" << i << ";" << w/2-2 << "H -" << graphnum << "- ";
+            outbuf.append("\033[")
+            .append(std::to_string(i))
+            .append(tmp)
+            .append(padint(100-(i-5)*100/(h-6), 3)).append( + "- ");
         }
-        std::cout << std::endl;
+        printf("%s\n", outbuf.data());
+        outbuf.clear();
     }
     return 0;
 }
