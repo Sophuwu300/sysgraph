@@ -1,6 +1,5 @@
 #include <string>
 #include <csignal>
-#include <dirent.h>
 #include <sys/ioctl.h>
 
 int w, h;
@@ -57,35 +56,40 @@ int cpuinfo::getloadavg() {
     return 100 * ((b[0]+b[1]+b[2]) - (a[0]+a[1]+a[2])) / ((b[0]+b[1]+b[2]+b[3]) - (a[0]+a[1]+a[2]+a[3]));
 }
 
-int cpuinfo::gettemp() {
-    struct dirent *item;
+int tempfile(int i, int istemp, int& val) {
     FILE* file;
     char buf[12];
+
+    std::string path = "/sys/class/thermal/thermal_zone";
+    path.append(std::to_string(i));
+    if (istemp) path.append("/temp");
+    else path.append("/type");
+
+    file = fopen(path.c_str(), "r");
+    if (file == NULL) {
+        return 1;
+    }
+    fread(&buf, 1, 12, file);
+    fclose(file);
+
+    if (istemp) val = ((int) buf[0] - 48) * 10 + ((int) buf[1] - 48);
+    else val = (std::string(buf) == "x86_pkg_temp");
+
+    return 0;
+}
+
+int cpuinfo::gettemp() {
     std::string name;
     std::string path;
-
-    DIR *dir = opendir("/sys/class/thermal/");
-    while ((item = readdir(dir))) {
-        name = std::string(item->d_name);
-        if (name.substr(0,12) == "thermal_zone") {
-
-            path = "/sys/class/thermal/" + name + "/type";
-
-            file = fopen(path.c_str(), "r");
-            fread(&buf, 1, 12, file);
-            fclose(file);
-
-            if (std::string(buf) == "x86_pkg_temp") {
-                path = "/sys/class/thermal/" + name + "/temp";
-
-                file = fopen(path.c_str(), "r");
-                fread(&buf, 1, 2, file);
-                fclose(file);
-                return ((int) buf[0] - 48) * 10 + ((int) buf[1] - 48);
-            }
+    int val = 0;
+    for (int i = 0;1; i++) {
+        if (tempfile(i, 0, val)) break;
+        if (val) {
+            tempfile(i, 1, val);
+            break;
         }
     }
-    return 0;
+    return val;
 }
 void cpuinfo::loadcpu(){
     loadavg = getloadavg();
