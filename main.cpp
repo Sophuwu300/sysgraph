@@ -103,9 +103,9 @@ void termsize(){
     h = size.ws_row;
 }
 
-void signal_callback_handler(int signum) {
+void signal_callback_handler(int _) {
     printf("\033[?1049l\033[?25h");
-    exit(signum);
+    exit(0);
 }
 
 std::string padint(int n, int len){
@@ -137,11 +137,9 @@ int main(){
     printf("\033[?25l\033[?1049h\033[2J");
     signal(SIGINT, signal_callback_handler);
     for (;;) {
-        termsize();
-
         mem.loadmem();
         cpu.loadcpu(); // contains usleep(1000000)
-
+        termsize();
         for (i = 150; i > 0; i--) {
             cpugraph[i] = cpugraph[i-1];
             ramgraph[i] = ramgraph[i-1];
@@ -150,7 +148,7 @@ int main(){
         ramgraph[0] = mem.percent();
 
         if (w < 60 || h < 10) {
-            printf("\033[2J\033[1;1HWindow too small\033[2;1HMinimum size: 60x10");
+            printf("\033[2J\033[1;1HWindow too small\033[2;1HMinimum size: 60x10\n");
             continue;
         }
         if (w > 300) w = 300;
@@ -184,7 +182,7 @@ int main(){
             .append(tmp)
             .append(padint(100-(i-5)*100/(h-6), 3)).append( + "- ");
         }
-        printf("%s\n", outbuf.data());
+        printf("%s\n", outbuf.c_str());
         outbuf.clear();
     }
     return 0;
