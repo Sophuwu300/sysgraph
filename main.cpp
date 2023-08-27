@@ -1,6 +1,7 @@
 #include <string>
 #include <csignal>
 #include <sys/ioctl.h>
+#include <chrono>
 
 int w, h;
 
@@ -141,7 +142,43 @@ void plot(int x, int y, int color, std::string* s){
     for (;y<h;y++) s->append("\033[").append(std::to_string(y)).append(print);
 }
 
-int main(){
+int helpmenu(int argc, char* argv[]) {
+    if (argc < 2) return 0;
+    if (!(std::string(argv[1])=="-h" || std::string(argv[1])=="--help")) return 0;
+    printf("\nUsage: %s [OPTION]\n\n", argv[0]);
+    printf("  -h, --help\t\tDisplay this help message.\n");
+    printf("      --log <file>\tLog to file (appends). Log frequency: 1 second. Format:\n");
+    printf("            \t\tunix, cpu usage, temp, ram taken, buffer, avialbale, free\n\n");
+    return 1;
+}
+
+int logarg(int argc, char* argv[], std::string& logdir) {
+    if (argc < 3) return 0;
+    if (std::string(argv[1]) != "--log") return 0;
+    logdir = std::string(argv[2]);
+    return 1;
+}
+
+void log(std::string logdir, meminfo mem, cpuinfo cpu) {
+    std::string logbuf;
+    logbuf.clear();
+    logbuf.append(std::to_string(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count()))
+    .append(",").append(std::to_string(cpu.loadavg))
+    .append(",").append(std::to_string(cpu.temp))
+    .append(",").append(std::to_string(mem.taken()))
+    .append(",").append(std::to_string(mem.used()-mem.taken()))
+    .append(",").append(std::to_string(mem.available))
+    .append(",").append(std::to_string(mem.free))
+    .append("\n");
+    FILE* f = fopen(logdir.c_str(), "a");
+    fputs(logbuf.c_str(), f);
+    fclose(f);
+}
+
+int main(int argc, char* argv[]){
+    if (helpmenu(argc, argv)) return 0;
+    std::string logdir;
+    int dolog = logarg(argc, argv, logdir);
     meminfo mem;
     cpuinfo cpu;
     int cpugraph[150] = {0};
@@ -167,6 +204,8 @@ int main(){
         cpugraph[0] = cpu.loadavg;
         ramgraph[0] = mem.percent();
         bufgraph[0] = mem.bufpercent();
+
+        if (dolog) log(logdir, mem, cpu);
 
 
         if (w < 60 || h < 10) {
