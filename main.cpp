@@ -56,41 +56,59 @@ int cpuinfo::getloadavg() {
     return 100 * ((b[0]+b[1]+b[2]) - (a[0]+a[1]+a[2])) / ((b[0]+b[1]+b[2]+b[3]) - (a[0]+a[1]+a[2]+a[3]));
 }
 
-int tempfile(int i, int istemp, int& val) {
-    FILE* file;
-    char buf[12];
-
-    std::string path = "/sys/class/thermal/thermal_zone";
-    path.append(std::to_string(i));
-    if (istemp) path.append("/temp");
-    else path.append("/type");
-
-    file = fopen(path.c_str(), "r");
-    if (file == NULL) {
-        return 1;
+struct cpufile{
+    std::string filepath;
+    std::string filename;
+    std::string comp;
+    std::string usepath(int i) {
+        std::string s = filepath;
+        s.append(std::to_string(i));
+        s.append(filename);
+        return s;
     }
-    fread(&buf, 1, 12, file);
-    fclose(file);
+};
 
-    if (istemp) val = ((int) buf[0] - 48) * 10 + ((int) buf[1] - 48);
-    else val = (std::string(buf) == "x86_pkg_temp");
-
-    return 0;
+int findcpu(cpufile& ct)  {
+    FILE* file;
+    char buf[ct.comp.length()+1];
+    int i = 0;
+    if (ct.filename == "_label") i = 1;
+    for (;;i++) {
+        file = fopen(ct.usepath(i).c_str(), "r");
+        if (file == NULL) return -1;
+        fread(&buf, 1, ct.comp.length(), file);
+        fclose(file);
+        if ( std::string(buf) == ct.comp ) {
+            return i;
+        }
+    }
 }
 
 int cpuinfo::gettemp() {
-    std::string name;
-    std::string path;
-    int val = 0;
-    for (int i = 0;1; i++) {
-        if (tempfile(i, 0, val)) break;
-        if (val) {
-            tempfile(i, 1, val);
-            break;
-        }
+    FILE* file;
+    char buf[2];
+    cpufile ct = {"/sys/class/thermal/thermal_zone", "/temp", "x86_pkg_temp"};
+    int fileNo = findcpu(ct);
+    if (fileNo == -1) {
+        ct = {"/sys/class/hwmon/hwmon", "/name", "k10temp"};
+        fileNo = findcpu(ct);
+        if (fileNo==-1) return 0;
+        ct.filename = "_label";
+        ct.filepath.append(std::to_string(fileNo)).append("/temp");
+        ct.comp = "Tdie";
+        fileNo = findcpu(ct);
+        if (fileNo==-1) return 0;
+        ct.filename = "_input";
+    } else {
+        ct.filename = "/temp";
     }
-    return val;
+    file = fopen(ct.usepath(fileNo).c_str(), "r");
+    if (file == NULL) return 0;
+    fread(&buf, 1, 2, file);
+    fclose(file);
+    return (buf[0]-48)*10 + buf[1] - 48;
 }
+
 void cpuinfo::loadcpu(){
     loadavg = getloadavg();
     temp = gettemp();
