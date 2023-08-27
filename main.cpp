@@ -146,6 +146,7 @@ int main(){
     cpuinfo cpu;
     int cpugraph[150] = {0};
     int ramgraph[150] = {0};
+    int bufgraph[150] = {0};
     int i;
     std::string bg;
     std::string graphnum;
@@ -161,9 +162,12 @@ int main(){
         for (i = 150; i > 0; i--) {
             cpugraph[i] = cpugraph[i-1];
             ramgraph[i] = ramgraph[i-1];
+            bufgraph[i] = bufgraph[i-1];
         }
         cpugraph[0] = cpu.loadavg;
         ramgraph[0] = mem.percent();
+        bufgraph[0] = mem.bufpercent();
+
 
         if (w < 60 || h < 10) {
             printf("\033[2J\033[1;1HWindow too small\033[2;1HMinimum size: 60x10\n");
@@ -188,8 +192,9 @@ int main(){
         outbuf.append("\0");
 
         for (i = 3; i < w/2-2+w%2; i++) {
-            plot(i, graphscale(cpugraph[w/2+1-i-3]), 4, &outbuf);
-            plot(i+w/2+1, graphscale(ramgraph[w/2+1-i-3]), 6, &outbuf);
+            plot(i, graphscale(cpugraph[w/2+1-i-3]), 2, &outbuf);
+            plot(i+w/2+1, graphscale(bufgraph[w/2+1-i-3]), 3, &outbuf);
+            plot(i+w/2+1, graphscale(ramgraph[w/2+1-i-3]), 1, &outbuf);
         }
         outbuf.append("\0");
 
