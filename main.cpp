@@ -159,7 +159,7 @@ int logarg(int argc, char* argv[], std::string& logdir) {
     return 1;
 }
 
-void log(std::string logdir, meminfo mem, cpuinfo cpu) {
+void log(std::string& logdir, meminfo& mem, cpuinfo& cpu) {
     std::string logbuf;
     logbuf.clear();
     logbuf.append(std::to_string(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count()))

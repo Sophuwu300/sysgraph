@@ -35,7 +35,7 @@ clean: build
 
 install: build/sysgraph
 	@echo Installing to /usr/local/bin/sysgraph
-	@sudo install build/sygraph /usr/local/bin/sysgraph && echo "Done!" || echo "Failed! Try running as root."
+	@sudo install build/sysgraph /usr/local/bin/sysgraph && echo "Done!" || echo "Failed! Try running as root."
 
 test: build/sysgraph
 	@echo "Running sysgraph"
