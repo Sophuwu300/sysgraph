@@ -79,16 +79,15 @@ int findcpu(cpufile& ct)  {
         if (file == NULL) return -1;
         fread(&buf, 1, ct.comp.length(), file);
         fclose(file);
-        if ( std::string(buf) == ct.comp ) {
-            return i;
-        }
+        if (std::string(buf).substr(0, ct.comp.length()) == ct.comp) break;
     }
+    return i;
 }
 
 int cpuinfo::gettemp() {
     FILE* file;
     char buf[2];
-    cpufile ct = {"/sys/class/thermal/thermal_zone", "/temp", "x86_pkg_temp"};
+    cpufile ct = {"/sys/class/thermal/thermal_zone", "/type", "x86_pkg_temp"};
     int fileNo = findcpu(ct);
     if (fileNo == -1) {
         ct = {"/sys/class/hwmon/hwmon", "/name", "k10temp"};
