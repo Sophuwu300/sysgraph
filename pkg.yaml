@@ -1,0 +1,5 @@
+name: sysgraph
+description: graphs cpu and ram use in the termianl
+maintainer: sophuwu
+homepage: github.com/sophuwu300/sysgraph
+directory: /usr/local/bin
